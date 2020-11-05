@@ -2,11 +2,11 @@ defmodule Rewizard.Cogs.FindAll do
   @behaviour Nosedrum.Command
 
   alias Nostrum.Api
-  alias Nostrum.Struct.Embed
   import Nostrum.Struct.Embed
+  alias Rewizard.Embeds
 
   @impl true
-  def usage, do: ["find_all <regex> <target>"]
+  def usage, do: ["find_all <regex> <target>", "find_all <regex> <flags> <target>"]
 
   @impl true
   def description, do: "Find all this regex matches in that target"
@@ -14,44 +14,46 @@ defmodule Rewizard.Cogs.FindAll do
   @impl true
   def predicates, do: [&Rewizard.Predicates.correct_channel/1, &Rewizard.Predicates.rate_limit/1]
 
-  def failed(regex, message) do
-    %Embed{}
-    |> put_title("Rewizard - Find All")
-    |> put_color(0xFF0000)
-    |> put_field("Regex", "`#{regex}`")
-    |> put_field("Error", message)
-  end
-
   def success(regex, target, result) do
-    %Embed{}
-    |> put_title("Rewizard - Find All")
-    |> put_color(0x008000)
-    |> put_field("Regex", "`#{Regex.source(regex)}`")
+    Embeds.success("Find All")
+    |> Embeds.regex(regex)
     |> put_field("Target", "`#{target}`")
     |> put_field("Result", "`#{inspect(result)}`")
   end
 
-  def find(regex, target) do
-    case Regex.run(regex, target) do
-      nil -> failed(regex, "Didn't find anything.")
-      result -> success(regex, target, result)
+  def failed(tpl_regex, message) do
+    Embeds.fail("Find All")
+    |> Embeds.regex(tpl_regex)
+    |> put_field("Error", message)
+  end
+
+  def find(str_regex, flags, target) do
+    res =
+      with {:ok, regex} <- Rewizard.Regex.compile(str_regex, flags),
+           {:ok, result} <- Rewizard.Regex.find_all(regex, target),
+           do: success(regex, target, result)
+
+    case res do
+      {:error, str_regex, msg} ->
+        failed(str_regex, msg)
+
+      {:fail, regex, msg} ->
+        failed(Rewizard.Regex.source(regex), msg)
+
+      _ ->
+        res
     end
   end
 
   @impl true
-  def command(msg, [regex, target]) do
-    reply =
-      case Regex.compile(regex) do
-        {:ok, regex} ->
-          find(regex, target)
+  def command(msg, [str_regex, target]) do
+    reply = find(str_regex, "", target)
+    Api.create_message!(msg.channel_id, embed: reply)
+  end
 
-        {:error, {error, location}} ->
-          failed(
-            regex,
-            "Failed to parse regex at location #{location} with error #{inspect(error)}"
-          )
-      end
-
+  @impl true
+  def command(msg, [str_regex, flags, target]) do
+    reply = find(str_regex, flags, target)
     Api.create_message!(msg.channel_id, embed: reply)
   end
 end

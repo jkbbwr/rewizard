@@ -17,7 +17,8 @@ defmodule Rewizard.Consumer do
     "split" => Rewizard.Cogs.Split,
     "replace" => Rewizard.Cogs.Replace,
     "help" => Rewizard.Cogs.Help,
-    "info" => Rewizard.Cogs.Info
+    "info" => Rewizard.Cogs.Info,
+    "flag" => Rewizard.Cogs.Flag
   }
 
   def handle_event({:READY, _data, _ws}) do
@@ -36,7 +37,7 @@ defmodule Rewizard.Consumer do
   end
 
   def handle_event({:MESSAGE_CREATE, msg, _ws}) do
-    if msg.content == "<@!#{Me.get().id}>" do
+    if msg.content =~ ~r/<@!?#{Me.get().id}>/ do
       Rewizard.Cogs.Info.command(msg, [])
     else
       CommandInvoker.handle_message(msg, CommandStorage)

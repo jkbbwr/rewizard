@@ -2,11 +2,11 @@ defmodule Rewizard.Cogs.Valid do
   @behaviour Nosedrum.Command
 
   alias Nostrum.Api
-  alias Nostrum.Struct.Embed
   import Nostrum.Struct.Embed
+  alias Rewizard.Embeds
 
   @impl true
-  def usage, do: ["valid <regex>"]
+  def usage, do: ["valid <regex>", "valid <regex> <flags>"]
 
   @impl true
   def description, do: "Check if this regex is valid."
@@ -14,36 +14,37 @@ defmodule Rewizard.Cogs.Valid do
   @impl true
   def predicates, do: [&Rewizard.Predicates.correct_channel/1, &Rewizard.Predicates.rate_limit/1]
 
-  def failed(regex, message) do
-    %Embed{}
-    |> put_title("Rewizard - Valid")
-    |> put_color(0xFF0000)
-    |> put_field("Regex", "`#{regex}`")
+  def success(regex) do
+    Embeds.success("Valid")
+    |> Embeds.regex(regex)
+    |> put_field("Valid", "Yes.")
+  end
+
+  def failed(tpl_regex, message) do
+    Embeds.fail("Valid")
+    |> Embeds.regex(tpl_regex)
     |> put_field("Error", message)
   end
 
-  def success(regex) do
-    %Embed{}
-    |> put_title("Rewizard - Valid")
-    |> put_color(0x008000)
-    |> put_field("Regex", "`#{Regex.source(regex)}`")
-    |> put_field("Valid", "Yes.")
+  def valid(str_regex, flags) do
+    case Rewizard.Regex.compile(str_regex, flags) do
+      {:ok, regex} ->
+        success(regex)
+
+      {:error, str_regex, msg} ->
+        failed(str_regex, msg)
+    end
   end
 
   @impl true
   def command(msg, [regex]) do
-    reply =
-      case Regex.compile(regex) do
-        {:ok, regex} ->
-          success(regex)
+    reply = valid(regex, "")
+    Api.create_message!(msg.channel_id, embed: reply)
+  end
 
-        {:error, {error, location}} ->
-          failed(
-            regex,
-            "Failed to parse regex at location #{location} with error #{inspect(error)}"
-          )
-      end
-
+  @impl true
+  def command(msg, [regex, flags]) do
+    reply = valid(regex, flags)
     Api.create_message!(msg.channel_id, embed: reply)
   end
 end
